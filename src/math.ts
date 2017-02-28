@@ -12,6 +12,27 @@ module math {
         }
     }
 
+    export class Rectangle {
+        x = 0;
+        y = 0;
+        width = 0;
+        height = 0;
+        constructor() {
+
+        }
+        isPointInRect(point: math.Point): boolean {
+            if (point.x > this.x
+                && point.y > this.y
+                && point.x < this.x + this.width
+                && point.y < this.y + this.height) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+        
+    }
+
     export function pointAppendMatrix(point: Point, m: Matrix): Point {
         var x = m.a * point.x + m.c * point.y + m.tx;
         var y = m.b * point.x + m.d * point.y + m.ty;
