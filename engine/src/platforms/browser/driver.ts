@@ -2,7 +2,7 @@ namespace engine {
 
     export let run = (canvas: HTMLCanvasElement) => {
         var stage = new Stage(canvas.width, canvas.height);
-        let context2D = canvas.getContext("2d");
+        var canvasRender = new canvas2DRenderer(canvas, stage);
 
         var react = (e: MouseEvent, type: MOUSE_EVENT) => {
             let x = e.offsetX;
@@ -63,10 +63,7 @@ namespace engine {
             let now = Date.now();
             let deltaTime = now - lastNow;
             Ticker.getInstance().notify(deltaTime);
-            context2D.clearRect(0, 0, 1000, 1000);
-            context2D.save();
-            stage.draw(context2D);
-            context2D.restore();
+            canvasRender.draw();
             lastNow = now;
             window.requestAnimationFrame(frameHandler);
         }
@@ -75,4 +72,94 @@ namespace engine {
 
         return stage;
     }
+
+    export class canvas2DRenderer {
+
+        private canvas2DContext: CanvasRenderingContext2D;
+        private stage: Stage;
+
+        constructor(canvas: HTMLCanvasElement, stage: Stage) {
+            let context2D = canvas.getContext("2d");
+            this.canvas2DContext = context2D;
+            this.stage = stage;
+        }
+
+        draw() {
+
+            let context2D = this.canvas2DContext;
+            this.stage.calculate(context2D);
+
+            context2D.clearRect(0, 0, 1000, 1000);
+            context2D.save();
+            for (let displayObject of DisplayObject.renderList) {
+                let type = displayObject.type;
+                context2D.globalAlpha = displayObject.globalAlpha;
+                if (type == DISPLAYOBJECT_TYPE.Bitmap || type == DISPLAYOBJECT_TYPE.MovieClip) {
+                    this.renderBitmapAndMovieClip(displayObject as Bitmap);
+                }
+                else if (type == DISPLAYOBJECT_TYPE.Shape) {
+                    this.renderShape(displayObject as Shape);
+                }
+                else if (type == DISPLAYOBJECT_TYPE.TextField) {
+                    this.renderTextField(displayObject as TextField);
+                }
+            }
+            context2D.restore();
+        }
+
+        /**
+         * 渲染图片或动画
+         */
+        private renderBitmapAndMovieClip(bitmap: Bitmap) {
+            let paint = () => {
+                this.canvas2DContext.globalAlpha = bitmap.globalAlpha;
+
+                if (bitmap.width && bitmap.height) {
+                    this.canvas2DContext.drawImage(bitmap.img, 0, 0, bitmap.width, bitmap.height);
+                } else {
+                    this.canvas2DContext.drawImage(bitmap.img, 0, 0);
+                }
+            }
+
+            if (bitmap.hasLoaded) {
+                paint();
+            } else {
+                bitmap.img.src = bitmap.url;
+                bitmap.img.onload = () => {
+                    paint();
+                    bitmap.hasLoaded = true;
+                }
+            }
+        }
+
+        /**
+         * 渲染文字
+         */
+        private renderTextField(textField: TextField) {
+            //透明度
+            this.canvas2DContext.globalAlpha = textField.globalAlpha;
+            //填充颜色
+            this.canvas2DContext.fillStyle = textField.color;
+            //文本格式
+            this.canvas2DContext.font = textField.font;
+            //绘制文本
+            this.canvas2DContext.fillText(textField.text, 0, 0);
+            //计算文本宽度
+            textField._measureTextWidth = this.canvas2DContext.measureText(textField.text).width;
+        }
+
+        /**
+         * 渲染图形
+         */
+        private renderShape(shape: Shape) {
+            //透明度
+            this.canvas2DContext.globalAlpha = shape.globalAlpha;
+            //填充颜色
+            this.canvas2DContext.fillStyle = shape.color;
+            //绘制矩形
+            this.canvas2DContext.fillRect(0, 0, shape.width, shape.height);
+        }
+
+    }
 }
+

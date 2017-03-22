@@ -163,6 +163,9 @@ var engine;
         return _TouchEvent;
     }());
     engine._TouchEvent = _TouchEvent;
+    /**
+     * 鼠标事件枚举类型
+     */
     (function (MOUSE_EVENT) {
         MOUSE_EVENT[MOUSE_EVENT["mousedown"] = 1] = "mousedown";
         MOUSE_EVENT[MOUSE_EVENT["mousemove"] = 2] = "mousemove";
@@ -170,6 +173,17 @@ var engine;
         MOUSE_EVENT[MOUSE_EVENT["click"] = 4] = "click";
     })(engine.MOUSE_EVENT || (engine.MOUSE_EVENT = {}));
     var MOUSE_EVENT = engine.MOUSE_EVENT;
+    /**
+     * DisplayObject类型枚举
+     */
+    (function (DISPLAYOBJECT_TYPE) {
+        DISPLAYOBJECT_TYPE[DISPLAYOBJECT_TYPE["Bitmap"] = 1] = "Bitmap";
+        DISPLAYOBJECT_TYPE[DISPLAYOBJECT_TYPE["TextField"] = 2] = "TextField";
+        DISPLAYOBJECT_TYPE[DISPLAYOBJECT_TYPE["Shape"] = 3] = "Shape";
+        DISPLAYOBJECT_TYPE[DISPLAYOBJECT_TYPE["MovieClip"] = 4] = "MovieClip";
+        DISPLAYOBJECT_TYPE[DISPLAYOBJECT_TYPE["Container"] = 5] = "Container";
+    })(engine.DISPLAYOBJECT_TYPE || (engine.DISPLAYOBJECT_TYPE = {}));
+    var DISPLAYOBJECT_TYPE = engine.DISPLAYOBJECT_TYPE;
     var Dispatcher = (function () {
         function Dispatcher() {
         }
@@ -183,10 +197,6 @@ var engine;
             }
             Dispatcher.doEventOrderList = [];
         };
-        /**
-         * 监听鼠标事件的显示对象列表
-         */
-        // static dispatcherList: DisplayObject[] = [];
         /**
          * 本次鼠标事件需要执行的事件队列，按照捕获后的顺序
          */
@@ -219,9 +229,9 @@ var engine;
             this.touchEnable = true;
         }
         /**
-         * 调用所有子容器的render方法
+         * 计算矩阵。
          */
-        DisplayObject.prototype.draw = function (context) {
+        DisplayObject.prototype.calculate = function (context) {
             if (this.analysisMatrix(context)) {
                 if (!this.parent) {
                     this.globalAlpha = this.alpha;
@@ -229,7 +239,6 @@ var engine;
                 else {
                     this.globalAlpha = this.alpha * this.parent.globalAlpha;
                 }
-                this.render(context);
             }
             else {
                 console.log("container wrong!");
@@ -287,7 +296,7 @@ var engine;
             }
         };
         /**
-         * 计算全局矩阵和本地矩阵,成功则返回true
+         * 计算全局矩阵和本地矩阵,成功则返回true,并且将自己加入渲染数组。
          */
         DisplayObject.prototype.analysisMatrix = function (context) {
             this.localMatrix = new math.Matrix();
@@ -305,19 +314,26 @@ var engine;
             var tx = this.globalMatrix.tx;
             var ty = this.globalMatrix.ty;
             context.setTransform(a, b, c, d, tx, ty);
+            //计算矩阵后加入渲染组。
+            DisplayObject.renderList.push(this);
             return true;
         };
+        /**
+         * 需要画出的显示对象组
+         */
+        DisplayObject.renderList = [];
         return DisplayObject;
     }());
     engine.DisplayObject = DisplayObject;
     var DisplayObjectContainer = (function (_super) {
         __extends(DisplayObjectContainer, _super);
         function DisplayObjectContainer() {
-            _super.apply(this, arguments);
+            _super.call(this);
             /**
              * 显示列表
              */
             this.children = [];
+            this.type = DISPLAYOBJECT_TYPE.Container;
         }
         /**
          * 添加一个现实对象，成功返回true
@@ -384,9 +400,21 @@ var engine;
             }
             // return ifExist ? -1 : goalNumber
         };
-        DisplayObjectContainer.prototype.render = function (context) {
-            for (var i = 0; i < this.children.length; i++) {
-                this.children[i].draw(context);
+        DisplayObjectContainer.prototype.calculate = function (context) {
+            if (this.analysisMatrix(context)) {
+                if (!this.parent) {
+                    this.globalAlpha = this.alpha;
+                }
+                else {
+                    this.globalAlpha = this.alpha * this.parent.globalAlpha;
+                }
+                for (var i = 0; i < this.children.length; i++) {
+                    this.children[i].calculate(context);
+                }
+            }
+            else {
+                console.log("container wrong!");
+                return;
             }
         };
         DisplayObjectContainer.prototype.hitTest = function (hitPoint) {
@@ -404,12 +432,16 @@ var engine;
         return DisplayObjectContainer;
     }(DisplayObject));
     engine.DisplayObjectContainer = DisplayObjectContainer;
+    /**
+     * 舞台
+     */
     var Stage = (function (_super) {
         __extends(Stage, _super);
         function Stage(stageX, stageY) {
             _super.call(this);
             this.stageW = stageX;
             this.stageH = stageY;
+            this.type = DISPLAYOBJECT_TYPE.Container;
         }
         return Stage;
     }(DisplayObjectContainer));
@@ -420,7 +452,7 @@ var engine;
     var Shape = (function (_super) {
         __extends(Shape, _super);
         function Shape() {
-            _super.apply(this, arguments);
+            _super.call(this);
             /**
              * 图形宽度
              */
@@ -433,15 +465,8 @@ var engine;
              * 图形颜色
              */
             this.color = "#000000";
+            this.type = DISPLAYOBJECT_TYPE.Shape;
         }
-        Shape.prototype.render = function (context) {
-            //透明度
-            context.globalAlpha = this.globalAlpha;
-            //填充颜色
-            context.fillStyle = this.color;
-            //绘制矩形
-            context.fillRect(0, 0, this.width, this.height);
-        };
         /**
          * 检测是否点击到Shape
          */
@@ -459,7 +484,7 @@ var engine;
     var TextField = (function (_super) {
         __extends(TextField, _super);
         function TextField() {
-            _super.apply(this, arguments);
+            _super.call(this);
             /**
              * 文本内容
              */
@@ -472,20 +497,12 @@ var engine;
              * 文本格式，例如"15px Arial"
              */
             this.font = "15px Arial";
+            /**
+             * 测量文本宽度
+             */
             this._measureTextWidth = 0;
+            this.type = DISPLAYOBJECT_TYPE.TextField;
         }
-        TextField.prototype.render = function (context) {
-            //透明度
-            context.globalAlpha = this.globalAlpha;
-            //填充颜色
-            context.fillStyle = this.color;
-            //文本格式
-            context.font = this.font;
-            //绘制文本
-            context.fillText(this.text, 0, 0);
-            //计算文本宽度
-            this._measureTextWidth = context.measureText(this.text).width;
-        };
         /**
          * 判断是否点击到文字
          */
@@ -503,36 +520,15 @@ var engine;
     var Bitmap = (function (_super) {
         __extends(Bitmap, _super);
         function Bitmap() {
-            _super.apply(this, arguments);
+            _super.call(this);
             /**
              * 图片路径
              */
             this.url = "";
             this.img = new Image();
             this.hasLoaded = false;
+            this.type = DISPLAYOBJECT_TYPE.Bitmap;
         }
-        Bitmap.prototype.render = function (context) {
-            var _this = this;
-            var paint = function () {
-                context.globalAlpha = _this.globalAlpha;
-                if (_this.width && _this.height) {
-                    context.drawImage(_this.img, 0, 0, _this.width, _this.height);
-                }
-                else {
-                    context.drawImage(_this.img, 0, 0);
-                }
-            };
-            if (this.hasLoaded) {
-                paint();
-            }
-            else {
-                this.img.src = this.url;
-                this.img.onload = function () {
-                    paint();
-                    _this.hasLoaded = true;
-                };
-            }
-        };
         /**
          * 改变bitmap
          */
@@ -575,6 +571,7 @@ var engine;
                 var newUrl = frameData.image;
                 _this.changeBitmap(newUrl);
             };
+            this.type = DISPLAYOBJECT_TYPE.MovieClip;
             this.setMovieClipData(data);
             this.play();
         }
@@ -620,7 +617,7 @@ var engine;
 (function (engine) {
     engine.run = function (canvas) {
         var stage = new engine.Stage(canvas.width, canvas.height);
-        var context2D = canvas.getContext("2d");
+        var canvasRender = new canvas2DRenderer(canvas, stage);
         var react = function (e, type) {
             var x = e.offsetX;
             var y = e.offsetY;
@@ -666,14 +663,91 @@ var engine;
             var now = Date.now();
             var deltaTime = now - lastNow;
             engine.Ticker.getInstance().notify(deltaTime);
-            context2D.clearRect(0, 0, 1000, 1000);
-            context2D.save();
-            stage.draw(context2D);
-            context2D.restore();
+            canvasRender.draw();
             lastNow = now;
             window.requestAnimationFrame(frameHandler);
         };
         window.requestAnimationFrame(frameHandler);
         return stage;
     };
+    var canvas2DRenderer = (function () {
+        function canvas2DRenderer(canvas, stage) {
+            var context2D = canvas.getContext("2d");
+            this.canvas2DContext = context2D;
+            this.stage = stage;
+        }
+        canvas2DRenderer.prototype.draw = function () {
+            var context2D = this.canvas2DContext;
+            this.stage.calculate(context2D);
+            context2D.clearRect(0, 0, 1000, 1000);
+            context2D.save();
+            for (var _i = 0, _a = engine.DisplayObject.renderList; _i < _a.length; _i++) {
+                var displayObject = _a[_i];
+                var type = displayObject.type;
+                if (type == engine.DISPLAYOBJECT_TYPE.Bitmap || type == engine.DISPLAYOBJECT_TYPE.MovieClip) {
+                    this.renderBitmapAndMovieClip(displayObject);
+                }
+                else if (type == engine.DISPLAYOBJECT_TYPE.Shape) {
+                    this.renderShape(displayObject);
+                }
+                else if (type == engine.DISPLAYOBJECT_TYPE.TextField) {
+                    this.renderTextField(displayObject);
+                }
+            }
+            context2D.restore();
+        };
+        /**
+         * 渲染图片或动画
+         */
+        canvas2DRenderer.prototype.renderBitmapAndMovieClip = function (bitmap) {
+            var _this = this;
+            var paint = function () {
+                _this.canvas2DContext.globalAlpha = bitmap.globalAlpha;
+                if (bitmap.width && bitmap.height) {
+                    _this.canvas2DContext.drawImage(bitmap.img, 0, 0, bitmap.width, bitmap.height);
+                }
+                else {
+                    _this.canvas2DContext.drawImage(bitmap.img, 0, 0);
+                }
+            };
+            if (bitmap.hasLoaded) {
+                paint();
+            }
+            else {
+                bitmap.img.src = bitmap.url;
+                bitmap.img.onload = function () {
+                    paint();
+                    bitmap.hasLoaded = true;
+                };
+            }
+        };
+        /**
+         * 渲染文字
+         */
+        canvas2DRenderer.prototype.renderTextField = function (textField) {
+            //透明度
+            this.canvas2DContext.globalAlpha = textField.globalAlpha;
+            //填充颜色
+            this.canvas2DContext.fillStyle = textField.color;
+            //文本格式
+            this.canvas2DContext.font = textField.font;
+            //绘制文本
+            this.canvas2DContext.fillText(textField.text, 0, 0);
+            //计算文本宽度
+            textField._measureTextWidth = this.canvas2DContext.measureText(textField.text).width;
+        };
+        /**
+         * 渲染图形
+         */
+        canvas2DRenderer.prototype.renderShape = function (shape) {
+            //透明度
+            this.canvas2DContext.globalAlpha = shape.globalAlpha;
+            //填充颜色
+            this.canvas2DContext.fillStyle = shape.color;
+            //绘制矩形
+            this.canvas2DContext.fillRect(0, 0, shape.width, shape.height);
+        };
+        return canvas2DRenderer;
+    }());
+    engine.canvas2DRenderer = canvas2DRenderer;
 })(engine || (engine = {}));

@@ -61,6 +61,9 @@ declare namespace engine {
         useCapture: boolean;
         constructor(Mouse_Event: MOUSE_EVENT, react: (e?: MouseEvent) => void, useCapture?: boolean);
     }
+    /**
+     * 鼠标事件枚举类型
+     */
     enum MOUSE_EVENT {
         mousedown = 1,
         mousemove = 2,
@@ -68,16 +71,29 @@ declare namespace engine {
         click = 4,
     }
     /**
+     * DisplayObject类型枚举
+     */
+    enum DISPLAYOBJECT_TYPE {
+        Bitmap = 1,
+        TextField = 2,
+        Shape = 3,
+        MovieClip = 4,
+        Container = 5,
+    }
+    /**
      * 实现此接口以渲染
      */
     interface Drawable {
-        render(context: CanvasRenderingContext2D): any;
         hitTest(hitPoint: math.Point): DisplayObject;
     }
     /**
      * 事件派发器接口
      */
     interface IDispatcher {
+        /**
+        * addEventListener添加的所有事件存储在此数组
+        */
+        selfEvents: _TouchEvent[];
         /**
          * 注册对鼠标事件的兴趣
          */
@@ -97,9 +113,6 @@ declare namespace engine {
     }
     abstract class Dispatcher {
         /**
-         * 监听鼠标事件的显示对象列表
-         */
-        /**
          * 本次鼠标事件需要执行的事件队列，按照捕获后的顺序
          */
         static doEventOrderList: _TouchEvent[];
@@ -110,6 +123,14 @@ declare namespace engine {
     }
     abstract class DisplayObject implements Drawable, IDispatcher {
         /**
+         * DisplayObject种类
+         */
+        type: DISPLAYOBJECT_TYPE;
+        /**
+         * 需要画出的显示对象组
+         */
+        static renderList: DisplayObject[];
+        /**
          * 父容器
          */
         parent: DisplayObjectContainer;
@@ -119,7 +140,7 @@ declare namespace engine {
         selfEvents: _TouchEvent[];
         x: number;
         y: number;
-        protected globalAlpha: number;
+        globalAlpha: number;
         /**
          * 透明度
          */
@@ -130,24 +151,20 @@ declare namespace engine {
          *旋转(角度制)
          */
         rotation: number;
-        protected globalMatrix: math.Matrix;
-        protected localMatrix: math.Matrix;
+        globalMatrix: math.Matrix;
+        localMatrix: math.Matrix;
         /**
          * 是否检测碰撞
          */
         touchEnable: boolean;
         /**
-         * 调用所有子容器的render方法
+         * 计算矩阵。
          */
-        draw(context: CanvasRenderingContext2D): void;
+        calculate(context: CanvasRenderingContext2D): void;
         /**
          * 子类覆写该方法获得碰撞检测
          */
         abstract hitTest(hitPoint: math.Point): DisplayObject;
-        /**
-         * 子类覆写render方法渲染
-         */
-        abstract render(context: CanvasRenderingContext2D): any;
         /**
          * 添加事件侦听器
          */
@@ -169,15 +186,16 @@ declare namespace engine {
             currentTarget: DisplayObject;
         }): void;
         /**
-         * 计算全局矩阵和本地矩阵,成功则返回true
+         * 计算全局矩阵和本地矩阵,成功则返回true,并且将自己加入渲染数组。
          */
-        protected analysisMatrix(context: CanvasRenderingContext2D): boolean;
+        analysisMatrix(context: CanvasRenderingContext2D): boolean;
     }
     class DisplayObjectContainer extends DisplayObject {
         /**
          * 显示列表
          */
         children: DisplayObject[];
+        constructor();
         /**
          * 添加一个现实对象，成功返回true
          */
@@ -194,9 +212,12 @@ declare namespace engine {
          * 判断是否存在传入的子物体，存在则返回子物体位置，否则返回-1
          */
         indexOfChildren(object: DisplayObject): number;
-        render(context: CanvasRenderingContext2D): void;
+        calculate(context: CanvasRenderingContext2D): void;
         hitTest(hitPoint: math.Point): DisplayObject;
     }
+    /**
+     * 舞台
+     */
     class Stage extends DisplayObjectContainer {
         /**
          * 舞台宽
@@ -224,7 +245,7 @@ declare namespace engine {
          * 图形颜色
          */
         color: string;
-        render(context: CanvasRenderingContext2D): void;
+        constructor();
         /**
          * 检测是否点击到Shape
          */
@@ -243,8 +264,11 @@ declare namespace engine {
          * 文本格式，例如"15px Arial"
          */
         font: string;
-        private _measureTextWidth;
-        render(context: CanvasRenderingContext2D): void;
+        /**
+         * 测量文本宽度
+         */
+        _measureTextWidth: number;
+        constructor();
         /**
          * 判断是否点击到文字
          */
@@ -256,10 +280,10 @@ declare namespace engine {
          */
         url: string;
         img: HTMLImageElement;
-        protected hasLoaded: boolean;
+        hasLoaded: boolean;
         width: number;
         height: number;
-        render(context: CanvasRenderingContext2D): void;
+        constructor();
         /**
          * 改变bitmap
          */
@@ -296,4 +320,22 @@ declare namespace engine {
 }
 declare namespace engine {
     let run: (canvas: HTMLCanvasElement) => Stage;
+    class canvas2DRenderer {
+        private canvas2DContext;
+        private stage;
+        constructor(canvas: HTMLCanvasElement, stage: Stage);
+        draw(): void;
+        /**
+         * 渲染图片或动画
+         */
+        private renderBitmapAndMovieClip(bitmap);
+        /**
+         * 渲染文字
+         */
+        private renderTextField(textField);
+        /**
+         * 渲染图形
+         */
+        private renderShape(shape);
+    }
 }

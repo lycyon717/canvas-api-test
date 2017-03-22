@@ -29,6 +29,9 @@ namespace engine {
         }
     }
 
+    /**
+     * 鼠标事件枚举类型
+     */
     export enum MOUSE_EVENT {
         mousedown = 1,
         mousemove = 2,
@@ -36,13 +39,21 @@ namespace engine {
         click = 4
     }
 
+    /**
+     * DisplayObject类型枚举
+     */
+    export enum DISPLAYOBJECT_TYPE {
+        Bitmap = 1,
+        TextField = 2,
+        Shape = 3,
+        MovieClip = 4,
+        Container = 5
+    }
 
     /**
      * 实现此接口以渲染
      */
     export interface Drawable {
-
-        render(context: CanvasRenderingContext2D);
         hitTest(hitPoint: math.Point): DisplayObject;
     }
 
@@ -50,6 +61,11 @@ namespace engine {
      * 事件派发器接口
      */
     export interface IDispatcher {
+
+        /**
+        * addEventListener添加的所有事件存储在此数组
+        */
+        selfEvents: _TouchEvent[];
 
         /**
          * 注册对鼠标事件的兴趣
@@ -65,15 +81,9 @@ namespace engine {
          * 派发一个鼠标事件
          */
         dispatchEvent(event: { type: MOUSE_EVENT, target: DisplayObject, currentTarget: DisplayObject });
-
     }
 
     export abstract class Dispatcher {
-
-        /**
-         * 监听鼠标事件的显示对象列表
-         */
-        // static dispatcherList: DisplayObject[] = [];
 
         /**
          * 本次鼠标事件需要执行的事件队列，按照捕获后的顺序
@@ -89,24 +99,20 @@ namespace engine {
             }
             Dispatcher.doEventOrderList = [];
         }
-
-        /**
-         * 判断点击到的物体是否监听鼠标事件
-         */
-        // static isInInterested(displayObject: DisplayObject): boolean {
-        //     let result = false;
-        //     for (let i = 0; i < Dispatcher.dispatcherList.length; i++) {
-        //         let container = Dispatcher.dispatcherList[i];
-        //         if (displayObject == container) {
-        //             result = true;
-        //             break;
-        //         }
-        //     }
-        //     return result;
-        // }
     }
 
     export abstract class DisplayObject implements Drawable, IDispatcher {
+
+
+        /**
+         * DisplayObject种类
+         */
+        type: DISPLAYOBJECT_TYPE;
+
+        /**
+         * 需要画出的显示对象组
+         */
+        static renderList: DisplayObject[] = [];
 
         /**
          * 父容器
@@ -121,7 +127,7 @@ namespace engine {
         x = 0;
         y = 0;
 
-        protected globalAlpha = 1;
+        globalAlpha = 1;
 
         /**
          * 透明度
@@ -136,8 +142,8 @@ namespace engine {
          */
         rotation = 0;
 
-        protected globalMatrix: math.Matrix;
-        protected localMatrix: math.Matrix;
+        globalMatrix: math.Matrix;
+        localMatrix: math.Matrix;
 
         /**
          * 是否检测碰撞
@@ -145,9 +151,9 @@ namespace engine {
         touchEnable: boolean = true;
 
         /**
-         * 调用所有子容器的render方法
+         * 计算矩阵。
          */
-        draw(context: CanvasRenderingContext2D) {
+        calculate(context: CanvasRenderingContext2D) {
 
             if (this.analysisMatrix(context)) {
                 if (!this.parent) {
@@ -155,7 +161,6 @@ namespace engine {
                 } else {
                     this.globalAlpha = this.alpha * this.parent.globalAlpha;
                 }
-                this.render(context);
             } else {
                 console.log("container wrong!");
                 return;
@@ -166,13 +171,6 @@ namespace engine {
          * 子类覆写该方法获得碰撞检测
          */
         abstract hitTest(hitPoint: math.Point): DisplayObject;
-
-
-        /**
-         * 子类覆写render方法渲染
-         */
-        abstract render(context: CanvasRenderingContext2D);
-
 
         /**
          * 添加事件侦听器
@@ -231,9 +229,9 @@ namespace engine {
         }
 
         /**
-         * 计算全局矩阵和本地矩阵,成功则返回true
+         * 计算全局矩阵和本地矩阵,成功则返回true,并且将自己加入渲染数组。
          */
-        protected analysisMatrix(context: CanvasRenderingContext2D): boolean {
+        analysisMatrix(context: CanvasRenderingContext2D): boolean {
 
             this.localMatrix = new math.Matrix();
             this.localMatrix.updateFromDisplayObject(this.x, this.y, this.ScaleX, this.ScaleY, this.rotation);
@@ -252,6 +250,9 @@ namespace engine {
             let ty = this.globalMatrix.ty;
 
             context.setTransform(a, b, c, d, tx, ty);
+
+            //计算矩阵后加入渲染组。
+            DisplayObject.renderList.push(this);
             return true;
         }
     }
@@ -262,6 +263,11 @@ namespace engine {
          * 显示列表
          */
         children: DisplayObject[] = [];
+
+        constructor() {
+            super();
+            this.type = DISPLAYOBJECT_TYPE.Container;
+        }
 
 
         /**
@@ -334,9 +340,20 @@ namespace engine {
             // return ifExist ? -1 : goalNumber
         }
 
-        render(context: CanvasRenderingContext2D) {
-            for (var i = 0; i < this.children.length; i++) {
-                this.children[i].draw(context);
+        calculate(context: CanvasRenderingContext2D) {
+
+            if (this.analysisMatrix(context)) {
+                if (!this.parent) {
+                    this.globalAlpha = this.alpha;
+                } else {
+                    this.globalAlpha = this.alpha * this.parent.globalAlpha;
+                }
+                for (var i = 0; i < this.children.length; i++) {
+                    this.children[i].calculate(context);
+                }
+            } else {
+                console.log("container wrong!");
+                return;
             }
         }
 
@@ -355,6 +372,10 @@ namespace engine {
         }
     }
 
+
+    /**
+     * 舞台
+     */
     export class Stage extends DisplayObjectContainer {
 
         /**
@@ -371,6 +392,7 @@ namespace engine {
             super();
             this.stageW = stageX;
             this.stageH = stageY;
+            this.type = DISPLAYOBJECT_TYPE.Container;
         }
     }
 
@@ -394,14 +416,9 @@ namespace engine {
          */
         color = "#000000";
 
-        render(context: CanvasRenderingContext2D) {
-
-            //透明度
-            context.globalAlpha = this.globalAlpha;
-            //填充颜色
-            context.fillStyle = this.color;
-            //绘制矩形
-            context.fillRect(0, 0, this.width, this.height);
+        constructor() {
+            super();
+            this.type = DISPLAYOBJECT_TYPE.Shape;
         }
 
         /**
@@ -435,21 +452,14 @@ namespace engine {
          */
         font = "15px Arial";
 
-        private _measureTextWidth: number = 0;
+        /**
+         * 测量文本宽度
+         */
+        _measureTextWidth: number = 0;
 
-
-        render(context: CanvasRenderingContext2D) {
-
-            //透明度
-            context.globalAlpha = this.globalAlpha;
-            //填充颜色
-            context.fillStyle = this.color;
-            //文本格式
-            context.font = this.font;
-            //绘制文本
-            context.fillText(this.text, 0, 0);
-            //计算文本宽度
-            this._measureTextWidth = context.measureText(this.text).width;
+        constructor() {
+            super();
+            this.type = DISPLAYOBJECT_TYPE.TextField;
         }
 
         /**
@@ -475,33 +485,15 @@ namespace engine {
 
         img = new Image();
 
-        protected hasLoaded = false;
+        hasLoaded = false;
 
         width: number;
 
         height: number;
 
-        render(context: CanvasRenderingContext2D) {
-
-            let paint = () => {
-                context.globalAlpha = this.globalAlpha;
-
-                if (this.width && this.height) {
-                    context.drawImage(this.img, 0, 0, this.width, this.height);
-                } else {
-                    context.drawImage(this.img, 0, 0);
-                }
-            }
-
-            if (this.hasLoaded) {
-                paint();
-            } else {
-                this.img.src = this.url;
-                this.img.onload = () => {
-                    paint();
-                    this.hasLoaded = true;
-                }
-            }
+        constructor() {
+            super();
+            this.type = DISPLAYOBJECT_TYPE.Bitmap;
         }
 
         /**
@@ -542,6 +534,7 @@ namespace engine {
 
         constructor(data: MovieClipData) {
             super();
+            this.type = DISPLAYOBJECT_TYPE.MovieClip;
             this.setMovieClipData(data);
             this.play();
         }
